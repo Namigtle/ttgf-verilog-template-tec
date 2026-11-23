@@ -1,5 +1,5 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
-# In this template I've designed a Control Algorithm
+# In this template I've designed a Control Algorithm by Alfredo Namigtle, Tec de Tehuacan
 # Tiny Tapeout Verilog Project Template
 
 - [Read the documentation for project](docs/info.md)
