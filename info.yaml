@@ -1,56 +1,57 @@
+
 # Tiny Tapeout project information
+
 project:
-  title:        "a"      # Project title
-  author:       "b"      # Your name
-  discord:      "c"      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  "d"      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
+  title: "Fixed-Point Digital PID Controller"
+  author: "Alfredo-Namigtle"
+  discord: ""
+  description: "Fixed-point digital PID controller using Tustin discretization"
+  language: "Verilog"
 
-  # How many tiles your design occupies? A single tile is about 340x160 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 3x4 or 4x4
+  # IMPORTANT:
+  # The PID coefficients were calculated for Ts = 200 us.
+  # Therefore the PID update frequency must be 5000 Hz.
+  # Confirm the actual clock supplied by Tiny Tapeout
+  # before finalizing this value.
+  clock_hz: 5000
 
-  # Your top module name must start with "tt_um_". Make it unique by including your github username:
-  top_module:  "tt_um_example"
+  tiles: "1x1"
 
-  # List your project's source files here.
-  # Source files must be in ./src and you must list each source file separately, one per line.
-  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
+  top_module: "tt_um_pid_controller"
+
   source_files:
     - "project.v"
+    - "pid_fixed.v"
 
-# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
-# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
-  # Inputs
-  ui[0]: "i1"
-  ui[1]: ""
-  ui[2]: ""
-  ui[3]: ""
-  ui[4]: ""
-  ui[5]: ""
-  ui[6]: ""
-  ui[7]: ""
+  # Reference ADC: ui_in[7:0]
+  ui[0]: "REF_ADC0"
+  ui[1]: "REF_ADC1"
+  ui[2]: "REF_ADC2"
+  ui[3]: "REF_ADC3"
+  ui[4]: "REF_ADC4"
+  ui[5]: "REF_ADC5"
+  ui[6]: "REF_ADC6"
+  ui[7]: "REF_ADC7"
 
-  # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
-  uo[6]: ""
-  uo[7]: ""
+  # DAC output: uo_out[7:0]
+  uo[0]: "DAC0"
+  uo[1]: "DAC1"
+  uo[2]: "DAC2"
+  uo[3]: "DAC3"
+  uo[4]: "DAC4"
+  uo[5]: "DAC5"
+  uo[6]: "DAC6"
+  uo[7]: "DAC7"
 
-  # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
-  uio[3]: ""
-  uio[4]: ""
-  uio[5]: ""
-  uio[6]: ""
-  uio[7]: ""
+  # Feedback ADC: uio_in[7:0]
+  uio[0]: "FB_ADC0"
+  uio[1]: "FB_ADC1"
+  uio[2]: "FB_ADC2"
+  uio[3]: "FB_ADC3"
+  uio[4]: "FB_ADC4"
+  uio[5]: "FB_ADC5"
+  uio[6]: "FB_ADC6"
+  uio[7]: "FB_ADC7"
 
-# Do not change!
 yaml_version: 6
