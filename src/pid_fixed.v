@@ -17,11 +17,9 @@ module pid_fixed (
     output wire [7:0] dac_code
 );
 
-    // =========================================================
-    // PID COEFFICIENTS: Q4.16
+    // PID COEFFICIENTS: Q4.16 accord to second order system
     // C(s) = Kp + Ki/s + Kd*Nf*s/(s+Nf)
     // Discretization: Tustin, Ts = 200 us
-    // =========================================================
 
     localparam signed [19:0] A1 =  20'sd47663;
     localparam signed [19:0] A2 =  20'sd17873;
@@ -30,10 +28,7 @@ module pid_fixed (
     localparam signed [19:0] B1 = -20'sd517136;
     localparam signed [19:0] B2 =  20'sd256908;
 
-    // =========================================================
     // INTERNAL REGISTERS
-    // =========================================================
-
     // Error history: Q16.16
     reg signed [31:0] e_z1;
     reg signed [31:0] e_z2;
