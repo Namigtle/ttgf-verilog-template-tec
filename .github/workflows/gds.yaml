@@ -67,10 +67,34 @@ jobs:
       - name: Copy GDS and OASIS files
         shell: bash
         run: |
-          set -e
-          ls -lah tt_submission
-          cp tt_submission/*.gds gh-pages/tinytapeout.gds
-          cp tt_submission/*.oas gh-pages/tinytapeout.oas
+          set -euo pipefail
+
+          echo "=== Searching for GDS files ==="
+          find tt_submission -type f -iname "*.gds" -print
+
+          echo "=== Searching for OASIS files ==="
+          find tt_submission -type f -iname "*.oas" -print
+
+          mapfile -t GDS_FILES < <(find tt_submission -type f -iname "*.gds" | sort)
+          mapfile -t OAS_FILES < <(find tt_submission -type f -iname "*.oas" | sort)
+
+          if [ "${#GDS_FILES[@]}" -eq 0 ]; then
+            echo "ERROR: No GDS file found."
+            exit 1
+          fi
+
+          if [ "${#OAS_FILES[@]}" -eq 0 ]; then
+            echo "ERROR: No OASIS file found."
+            exit 1
+          fi
+
+          mkdir -p gh-pages
+
+          cp "${GDS_FILES[0]}" gh-pages/tinytapeout.gds
+          cp "${OAS_FILES[0]}" gh-pages/tinytapeout.oas
+
+          echo "=== Files copied successfully ==="
+          ls -lh gh-pages/tinytapeout.*
 
       - name: Generate viewer redirect
         shell: bash
