@@ -1,3 +1,4 @@
+
 name: gds
 
 on:
@@ -37,11 +38,85 @@ jobs:
       - name: GL test
         uses: TinyTapeout/tt-gds-action/gl_test@ttgf26c
 
-  viewer:
+  # ==========================================
+  # VIEWER BUILD: prepare and upload the site
+  # ==========================================
+
+  viewer_build:
     needs: gds
     runs-on: ubuntu-24.04
-    permissions:
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
+
     steps:
-      - uses: TinyTapeout/tt-gds-action/viewer@ttgf26c
+      - name: Download GDS artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: tt_submission
+          path: tt_submission
+
+      - name: Read PDK information
+        shell: bash
+        working-directory: tt_submission
+        run: |
+          PDK=$(jq -r '.PDK' pdk.json)
+          echo "PDK=$PDK" >> "$GITHUB_ENV"
+
+      - name: Download GDS render
+        uses: actions/download-artifact@v7
+        with:
+          name: gds_render
+          path: gh-pages
+
+      - name: Copy GDS and OASIS files
+        shell: bash
+        run: |
+          cp tt_submission/*.gds gh-pages/tinytapeout.gds
+          cp tt_submission/*.oas gh-pages/tinytapeout.oas
+
+      - name: Generate viewer redirect
+        shell: bash
+        run: |
+          cat << EOF > gh-pages/index.html
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Redirecting to 3D Viewer...</title>
+          </head>
+          <body>
+            <script>
+              location.href = "https://gds-viewer.tinytapeout.com/?pdk=${PDK}&model=" + encodeURIComponent(location.href + '/tinytapeout.oas');
+            </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: gh-pages
+          name: github-pages-${{ github.run_attempt }}
+
+  # ==========================================
+  # VIEWER DEPLOY: publish the uploaded site
+  # ==========================================
+
+  viewer_deploy:
+    needs: viewer_build
+    runs-on: ubuntu-24.04
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
