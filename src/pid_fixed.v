@@ -1,10 +1,16 @@
+
 /*
- * Copyright (c) 2024 Your Name
+ * Copyright (c) 2026
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Sequential fixed-point PID controller.
+ *
+ * External clock: 50 MHz
+ * PID sampling frequency: 5 kHz
+ * Sampling period: 200 us
+ *
+ * One shared multiplier and one shared accumulator.
  */
-
-
-//`timescale 1ns/1ps aasasas
 
 module pid_fixed (
     input  wire       clk,
@@ -14,12 +20,21 @@ module pid_fixed (
     input  wire [7:0] ref_adc,
     input  wire [7:0] feedback_adc,
 
-    output wire [7:0] dac_code
+    output reg  [7:0] dac_code
 );
 
-    // PID COEFFICIENTS: Q4.16 accord to second order system
-    // C(s) = Kp + Ki/s + Kd*Nf*s/(s+Nf)
-    // Discretization: Tustin, Ts = 200 us
+    // =========================================================
+    // TIMING
+    // =========================================================
+
+    localparam [13:0] SAMPLE_COUNT_MAX = 14'd9999;
+
+    reg [13:0] sample_count;
+
+    // =========================================================
+    // PID COEFFICIENTS - Q4.16
+    // Tustin discretization, Ts = 200 us
+    // =========================================================
 
     localparam signed [19:0] A1 =  20'sd47663;
     localparam signed [19:0] A2 =  20'sd17873;
@@ -28,203 +43,421 @@ module pid_fixed (
     localparam signed [19:0] B1 = -20'sd517136;
     localparam signed [19:0] B2 =  20'sd256908;
 
-    // INTERNAL REGISTERS
-    // Error history: Q16.16
+    // =========================================================
+    // PID HISTORY
+    // =========================================================
+
     reg signed [31:0] e_z1;
     reg signed [31:0] e_z2;
 
-    // PID output history: Q8.16
     reg signed [23:0] u_z1;
     reg signed [23:0] u_z2;
 
-    // Current error
+    reg signed [31:0] e_current;
+
+    reg signed [23:0] u_internal;
+
+    // =========================================================
+    // CURRENT ERROR
+    // =========================================================
+
     wire signed [8:0] error_code;
 
     assign error_code =
         $signed({1'b0, ref_adc}) -
         $signed({1'b0, feedback_adc});
 
-    // Convert ADC difference to Q16.16
-    // 5/256 * 65536 = 1280
-
     wire signed [31:0] error_q16;
 
     assign error_q16 = error_code * 32'sd1280;
 
     // =========================================================
-    // SIGN EXTENSION
+    // FSM STATES
     // =========================================================
 
-    wire signed [63:0] e0_ext;
-    wire signed [63:0] e1_ext;
-    wire signed [63:0] e2_ext;
+    localparam [3:0]
+        IDLE   = 4'd0,
+        MAC_A1 = 4'd1,
+        MAC_A2 = 4'd2,
+        MAC_B0 = 4'd3,
+        MAC_B1 = 4'd4,
+        MAC_B2 = 4'd5,
+        ROUND  = 4'd6,
+        DIVIDE = 4'd7;
 
-    wire signed [63:0] u1_ext;
-    wire signed [63:0] u2_ext;
-
-    wire signed [63:0] a1_ext;
-    wire signed [63:0] a2_ext;
-    wire signed [63:0] b0_ext;
-    wire signed [63:0] b1_ext;
-    wire signed [63:0] b2_ext;
-
-    assign e0_ext = {{32{error_q16[31]}}, error_q16};
-    assign e1_ext = {{32{e_z1[31]}}, e_z1};
-    assign e2_ext = {{32{e_z2[31]}}, e_z2};
-
-    assign u1_ext = {{40{u_z1[23]}}, u_z1};
-    assign u2_ext = {{40{u_z2[23]}}, u_z2};
-
-    assign a1_ext = {{44{A1[19]}}, A1};
-    assign a2_ext = {{44{A2[19]}}, A2};
-    assign b0_ext = {{44{B0[19]}}, B0};
-    assign b1_ext = {{44{B1[19]}}, B1};
-    assign b2_ext = {{44{B2[19]}}, B2};
+    reg [3:0] state;
 
     // =========================================================
-    // MULTIPLICATIONS
-    // Products are Q32.32
+    // SHARED MULTIPLIER
     // =========================================================
 
-    wire signed [63:0] P_A1;
-    wire signed [63:0] P_A2;
+    reg signed [19:0] mult_coef;
+    reg signed [31:0] mult_data;
 
-    wire signed [63:0] P_B0;
-    wire signed [63:0] P_B1;
-    wire signed [63:0] P_B2;
+    wire signed [51:0] product;
 
-    assign P_A1 = a1_ext * u1_ext;
-    assign P_A2 = a2_ext * u2_ext;
+    assign product =
+    $signed(mult_coef) * $signed(mult_data);
 
-    assign P_B0 = b0_ext * e0_ext;
-    assign P_B1 = b1_ext * e1_ext;
-    assign P_B2 = b2_ext * e2_ext;
+    always @(*) begin
+
+        mult_coef = 20'sd0;
+        mult_data = 32'sd0;
+
+        case (state)
+
+            MAC_A1: begin
+                mult_coef = A1;
+                mult_data = {{8{u_z1[23]}}, u_z1};
+            end
+
+            MAC_A2: begin
+                mult_coef = A2;
+                mult_data = {{8{u_z2[23]}}, u_z2};
+            end
+
+            MAC_B0: begin
+                mult_coef = B0;
+                mult_data = e_current;
+            end
+
+            MAC_B1: begin
+                mult_coef = B1;
+                mult_data = e_z1;
+            end
+
+            MAC_B2: begin
+                mult_coef = B2;
+                mult_data = e_z2;
+            end
+
+            default: begin
+                mult_coef = 20'sd0;
+                mult_data = 32'sd0;
+            end
+
+        endcase
+
+    end
 
     // =========================================================
-    // ACCUMULATOR
+    // SHARED ACCUMULATOR
     // =========================================================
 
-    wire signed [63:0] accumulator;
+    reg signed [55:0] accumulator;
 
-    assign accumulator =
-          P_A1
-        + P_A2
-        + P_B0
-        + P_B1
-        + P_B2;
+    wire signed [55:0] product_extended;
+
+    assign product_extended =
+        {{4{product[51]}}, product};
 
     // =========================================================
     // ROUNDING: Q32.32 -> Q8.16
+    //
+    // Preserve the rounding convention of the original design.
     // =========================================================
 
-    function signed [63:0] round_q16;
-        input signed [63:0] value;
-        begin
-            if (value >= 0)
-                round_q16 = (value + 64'sd32768) >>> 16;
-            else
-                round_q16 = (value - 64'sd32768) >>> 16;
-        end
-    endfunction
+    wire signed [55:0] rounded_value;
 
-    wire signed [63:0] u_next_wide;
-
-    assign u_next_wide = round_q16(accumulator);
+    assign rounded_value =
+        (accumulator >= 0)
+        ? ((accumulator + 56'sd32768) >>> 16)
+        : ((accumulator - 56'sd32768) >>> 16);
 
     // =========================================================
-    // SATURATION TO SIGNED 24-BIT Q8.16
+    // INTERNAL SATURATION
     // =========================================================
 
     function signed [23:0] saturate_internal;
-        input signed [63:0] value;
+
+        input signed [55:0] value;
+
         begin
-            if (value > 64'sd8388607)
+
+            if (value > 56'sd8388607)
                 saturate_internal = 24'sh7FFFFF;
-            else if (value < -64'sd8388608)
+
+            else if (value < -56'sd8388608)
                 saturate_internal = 24'sh800000;
+
             else
                 saturate_internal = value[23:0];
+
         end
+
     endfunction
 
     wire signed [23:0] u_next;
 
-    assign u_next = saturate_internal(u_next_wide);
+    assign u_next = saturate_internal(rounded_value);
 
     // =========================================================
-    // SEQUENTIAL PID
+    // SEQUENTIAL DAC DIVIDER
+    //
+    // DAC_code = round(u_internal / 640)
+    //
+    // Restoring division, 18 iterations.
     // =========================================================
 
-    reg signed [23:0] u_internal;
+    reg [17:0] div_numerator;
+    reg [10:0] div_remainder;
+    reg [17:0] div_quotient;
+    reg [4:0]  div_count;
+
+    wire [10:0] remainder_trial;
+
+    assign remainder_trial =
+        {div_remainder[9:0], div_numerator[17]};
+
+    wire div_bit;
+
+    assign div_bit = (remainder_trial >= 11'd640);
+
+    wire [17:0] quotient_next;
+
+    assign quotient_next =
+        {div_quotient[16:0], div_bit};
+
+    // =========================================================
+    // MAIN SEQUENTIAL PROCESS
+    // =========================================================
 
     always @(posedge clk or negedge rst_n) begin
 
         if (!rst_n) begin
 
-            e_z1       <= 32'sd0;
-            e_z2       <= 32'sd0;
+            sample_count <= 14'd0;
 
-            u_z1       <= 24'sd0;
-            u_z2       <= 24'sd0;
+            state <= IDLE;
+
+            e_z1 <= 32'sd0;
+            e_z2 <= 32'sd0;
+
+            u_z1 <= 24'sd0;
+            u_z2 <= 24'sd0;
+
+            e_current <= 32'sd0;
 
             u_internal <= 24'sd0;
+
+            accumulator <= 56'sd0;
+
+            div_numerator <= 18'd0;
+            div_remainder <= 11'd0;
+            div_quotient <= 18'd0;
+            div_count <= 5'd0;
+
+            dac_code <= 8'd0;
 
         end
 
         else if (ena) begin
 
-            // Update output history
-            u_z2 <= u_z1;
-            u_z1 <= u_next;
+            // -------------------------------------------------
+            // SAMPLE COUNTER
+            // One PID sample every 10,000 clock cycles.
+            // -------------------------------------------------
 
-            // Update error history
-            e_z2 <= e_z1;
-            e_z1 <= error_q16;
+            if (sample_count == SAMPLE_COUNT_MAX)
+                sample_count <= 14'd0;
+            else
+                sample_count <= sample_count + 1'b1;
 
-            // Store current PID output
-            u_internal <= u_next;
+            // -------------------------------------------------
+            // FSM
+            // -------------------------------------------------
+
+            case (state)
+
+                // =============================================
+                // IDLE
+                // =============================================
+
+                IDLE: begin
+
+                    if (sample_count == SAMPLE_COUNT_MAX) begin
+
+                        e_current <= error_q16;
+
+                        accumulator <= 56'sd0;
+
+                        state <= MAC_A1;
+
+                    end
+
+                end
+
+                // =============================================
+                // MAC A1
+                // =============================================
+
+                MAC_A1: begin
+
+                    accumulator <=
+                        accumulator + product_extended;
+
+                    state <= MAC_A2;
+
+                end
+
+                // =============================================
+                // MAC A2
+                // =============================================
+
+                MAC_A2: begin
+
+                    accumulator <=
+                        accumulator + product_extended;
+
+                    state <= MAC_B0;
+
+                end
+
+                // =============================================
+                // MAC B0
+                // =============================================
+
+                MAC_B0: begin
+
+                    accumulator <=
+                        accumulator + product_extended;
+
+                    state <= MAC_B1;
+
+                end
+
+                // =============================================
+                // MAC B1
+                // =============================================
+
+                MAC_B1: begin
+
+                    accumulator <=
+                        accumulator + product_extended;
+
+                    state <= MAC_B2;
+
+                end
+
+                // =============================================
+                // MAC B2
+                // =============================================
+
+                MAC_B2: begin
+
+                    accumulator <=
+                        accumulator + product_extended;
+
+                    state <= ROUND;
+
+                end
+
+                // =============================================
+                // ROUND AND UPDATE PID HISTORY
+                // =============================================
+
+                ROUND: begin
+
+                    // Update error history
+                    e_z2 <= e_z1;
+                    e_z1 <= e_current;
+
+                    // Update output history
+                    u_z2 <= u_z1;
+                    u_z1 <= u_next;
+
+                    u_internal <= u_next;
+
+                    // DAC lower saturation
+                    if (u_next <= 24'sd0) begin
+
+                        dac_code <= 8'd0;
+
+                        state <= IDLE;
+
+                    end
+
+                    // DAC upper saturation
+                    else if (u_next >= 24'sd163840) begin
+
+                        dac_code <= 8'd255;
+
+                        state <= IDLE;
+
+                    end
+
+                    // Start sequential division
+                    else begin
+
+                        div_numerator <= u_next[17:0] + 18'd320;
+
+                        div_remainder <= 11'd0;
+                        div_quotient <= 18'd0;
+                        div_count <= 5'd0;
+
+                        state <= DIVIDE;
+
+                    end
+
+                end
+
+                // =============================================
+                // SEQUENTIAL DIVISION BY 640
+                // =============================================
+
+                DIVIDE: begin
+
+                    if (div_bit) begin
+
+                        div_remainder <=
+                            remainder_trial - 11'd640;
+
+                    end
+
+                    else begin
+
+                        div_remainder <= remainder_trial;
+
+                    end
+
+                    div_quotient <= quotient_next;
+
+                    div_numerator <=
+                        {div_numerator[16:0], 1'b0};
+
+                    if (div_count == 5'd17) begin
+
+                        if (|quotient_next[17:8])
+                            dac_code <= 8'd255;
+                        else
+                            dac_code <= quotient_next[7:0];
+
+                        state <= IDLE;
+
+                    end
+
+                    else begin
+
+                        div_count <= div_count + 1'b1;
+
+                    end
+
+                end
+
+                // =============================================
+                // DEFAULT
+                // =============================================
+
+                default: begin
+
+                    state <= IDLE;
+
+                end
+
+            endcase
 
         end
+
     end
-
-    // =========================================================
-    // DAC CONVERSION
-    //
-    // DAC range: 0 to 2.5 V
-    // Q16.16 conversion:
-    // DAC_code = round(u_internal / 640)
-    // =========================================================
-
-    function [7:0] convert_dac;
-        input signed [23:0] value;
-
-        reg signed [63:0] temp;
-        reg signed [63:0] code;
-
-        begin
-
-            if (value <= 0)
-                convert_dac = 8'd0;
-
-            else if (value >= 24'sd163840)
-                convert_dac = 8'd255;
-
-            else begin
-
-                temp = {{40{value[23]}}, value};
-
-                // Round division by 640
-                code = (temp + 64'sd320) / 64'sd640;
-
-                if (code > 255)
-                    convert_dac = 8'd255;
-                else
-                    convert_dac = code[7:0];
-
-            end
-        end
-    endfunction
-
-    assign dac_code = convert_dac(u_internal);
 
 endmodule

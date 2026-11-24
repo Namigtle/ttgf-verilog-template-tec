@@ -13,7 +13,7 @@ project:
   # Therefore the PID update frequency must be 5000 Hz.
   # Confirm the actual clock supplied by Tiny Tapeout
   # before finalizing this value.
-  clock_hz: 5000
+  clock_hz: 50000000
 
   tiles: "1x1"
 
