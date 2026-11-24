@@ -24,7 +24,7 @@ u[k] = u[k-1] + \frac{9e[k]-7e[k-1]}{128}
 
 The controller gains are:
 
-- Proportional gain: \(K_p = 0.0625\)
+- Proportional gain: $K_p = 0.0625$
 - Integral gain: \(K_i = 78.125\)
 - Sampling period: \(T_s = 200\,\mu s\)
 - Sampling frequency: \(f_s = 5\,kHz\)
