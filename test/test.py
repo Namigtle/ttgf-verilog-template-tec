@@ -9,19 +9,17 @@ from cocotb.triggers import (
 
 
 # =============================================================
-# PID TIMING PARAMETERS
+# TIMING PARAMETERS
 # =============================================================
 
-CLOCK_PERIOD_NS = 20          # 50 MHz
-PID_SAMPLE_CYCLES = 10000     # 5 kHz
-PID_UPDATE_WAIT = 10030       # Sampling + FSM + DAC conversion
-
+CLOCK_PERIOD_NS = 20
+SAMPLE_CYCLES = 10000
 
 # =============================================================
 # RESET FUNCTION
 # =============================================================
 
-async def reset_pid(dut):
+async def reset_pi(dut):
 
     dut.rst_n.value = 0
     dut.ena.value = 1
@@ -29,10 +27,10 @@ async def reset_pid(dut):
     dut.ui_in.value = 0
     dut.uio_in.value = 0
 
-    # Keep reset active for three clock cycles
+    # Apply reset for three clock cycles
     await ClockCycles(dut.clk, 3)
 
-    # Release reset away from the rising edge
+    # Release reset away from rising edge
     await FallingEdge(dut.clk)
     dut.rst_n.value = 1
 
@@ -44,26 +42,21 @@ async def reset_pid(dut):
 
 
 # =============================================================
-# WAIT FOR A COMPLETE PID UPDATE
+# WAIT FOR ONE PI UPDATE
 # =============================================================
 
-async def wait_for_pid_update(dut):
+async def wait_for_pi_update(dut):
 
-    # Wait for one complete sampling interval
-    # plus the sequential PID processing time.
-
-    await ClockCycles(dut.clk, PID_UPDATE_WAIT)
-
-    # Allow signal updates to settle
+    await ClockCycles(dut.clk, SAMPLE_CYCLES)
     await Timer(1, unit="ns")
 
 
 # =============================================================
-# TEST SUITE
+# MAIN TEST
 # =============================================================
 
 @cocotb.test()
-async def test_pid_controller(dut):
+async def test_pi_controller(dut):
 
     # ---------------------------------------------------------
     # START CLOCK
@@ -77,10 +70,10 @@ async def test_pid_controller(dut):
 
     cocotb.start_soon(clock.start())
 
-    await reset_pid(dut)
+    await reset_pi(dut)
 
     # =========================================================
-    # TEST 1: POSITIVE TRACKING ERROR
+    # TEST 1: POSITIVE ERROR
     # =========================================================
 
     cocotb.log.info("TEST 1: Positive tracking error")
@@ -90,7 +83,7 @@ async def test_pid_controller(dut):
     dut.ui_in.value = 26
     dut.uio_in.value = 0
 
-    await wait_for_pid_update(dut)
+    await wait_for_pi_update(dut)
 
     positive_output = int(dut.uo_out.value)
 
@@ -99,22 +92,49 @@ async def test_pid_controller(dut):
     )
 
     assert positive_output > 0, \
-        "Positive error must generate positive DAC output"
+        "Positive error must generate positive control output"
 
     # =========================================================
-    # TEST 2: NEGATIVE TRACKING ERROR
+    # TEST 2: INTEGRAL ACTION
     # =========================================================
 
-    cocotb.log.info("TEST 2: Negative tracking error")
+    cocotb.log.info("TEST 2: Integral accumulation")
 
-    await reset_pid(dut)
+    first_output = positive_output
+
+    await wait_for_pi_update(dut)
+
+    second_output = int(dut.uo_out.value)
+
+    await wait_for_pi_update(dut)
+
+    third_output = int(dut.uo_out.value)
+
+    cocotb.log.info(
+        f"PI outputs: {first_output}, "
+        f"{second_output}, {third_output}"
+    )
+
+    assert second_output >= first_output, \
+        "PI output should not decrease for constant positive error"
+
+    assert third_output > first_output, \
+        "Integral action must increase the output for constant positive error"
+
+    # =========================================================
+    # TEST 3: NEGATIVE ERROR
+    # =========================================================
+
+    cocotb.log.info("TEST 3: Negative tracking error")
+
+    await reset_pi(dut)
 
     await FallingEdge(dut.clk)
 
     dut.ui_in.value = 0
     dut.uio_in.value = 26
 
-    await wait_for_pid_update(dut)
+    await wait_for_pi_update(dut)
 
     negative_output = int(dut.uo_out.value)
 
@@ -126,31 +146,26 @@ async def test_pid_controller(dut):
         "Negative control output must be clamped to zero"
 
     # =========================================================
-    # TEST 3: ENABLE FUNCTIONALITY
+    # TEST 4: ENABLE FUNCTIONALITY
     # =========================================================
 
-    cocotb.log.info("TEST 3: Enable functionality")
+    cocotb.log.info("TEST 4: Enable functionality")
 
-    await reset_pid(dut)
+    await reset_pi(dut)
 
     await FallingEdge(dut.clk)
 
     dut.ui_in.value = 26
     dut.uio_in.value = 0
 
-    # Wait for the first valid PID output
-    await wait_for_pid_update(dut)
+    await wait_for_pi_update(dut)
 
     held_output = int(dut.uo_out.value)
 
     assert held_output > 0, \
-        "PID output must be positive before disabling"
+        "PI output must be positive before disabling"
 
-    cocotb.log.info(
-        f"Output before disabling: {held_output}"
-    )
-
-    # Disable the controller
+    # Disable controller
     await FallingEdge(dut.clk)
 
     dut.ena.value = 0
@@ -158,46 +173,44 @@ async def test_pid_controller(dut):
     dut.ui_in.value = 0
     dut.uio_in.value = 0
 
-    # Verify that the output remains unchanged
     await ClockCycles(dut.clk, 20)
     await Timer(1, unit="ns")
 
     disabled_output = int(dut.uo_out.value)
 
     assert disabled_output == held_output, \
-        "PID output must hold its value when ena is low"
+        "Output must hold its value when ena is low"
 
     cocotb.log.info(
-        f"Enable test passed: output held at {disabled_output}"
+        f"Enable test passed: DAC = {disabled_output}"
     )
 
     # =========================================================
-    # TEST 4: ASYNCHRONOUS RESET FUNCTIONALITY
+    # TEST 5: ASYNCHRONOUS RESET
     # =========================================================
 
-    cocotb.log.info("TEST 4: Asynchronous reset")
+    cocotb.log.info("TEST 5: Asynchronous reset")
 
-    # Assert reset while the clock is running
     await FallingEdge(dut.clk)
 
     dut.rst_n.value = 0
 
-    # Check asynchronous reset before the next rising edge
+    # Check before next rising edge
     await Timer(1, unit="ns")
 
     reset_output = int(dut.uo_out.value)
 
     assert reset_output == 0, \
-        "Asynchronous reset must clear the DAC output"
+        "Asynchronous reset must clear DAC output"
 
     cocotb.log.info(
         "Asynchronous reset test passed"
     )
 
     # =========================================================
-    # ALL TESTS COMPLETED
+    # FINAL REPORT
     # =========================================================
 
     cocotb.log.info("-----------------------------------")
-    cocotb.log.info("ALL PID TESTS PASSED")
+    cocotb.log.info("ALL PI TESTS PASSED")
     cocotb.log.info("-----------------------------------")

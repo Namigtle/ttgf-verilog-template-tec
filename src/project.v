@@ -39,7 +39,7 @@ module tt_um_pid_controller (
     // PID FIXED-POINT CONTROLLER
     // -------------------------------------------------
 
-    pid_fixed pid_inst (
+    pi_fixed pid_inst (
         .clk          (clk),
         .rst_n        (rst_n),
         .ena           (ena),

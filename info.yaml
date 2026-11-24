@@ -21,7 +21,7 @@ project:
 
   source_files:
     - "project.v"
-    - "pid_fixed.v"
+    - "pi_fixed.v"
 
 pinout:
   # Reference ADC: ui_in[7:0]
