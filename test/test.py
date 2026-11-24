@@ -13,7 +13,7 @@ from cocotb.triggers import (
 # =============================================================
 
 CLOCK_PERIOD_NS = 20
-SAMPLE_CYCLES = 10000
+SAMPLE_CYCLES = 10008
 
 # =============================================================
 # RESET FUNCTION
