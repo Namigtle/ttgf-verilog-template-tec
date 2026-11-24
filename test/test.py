@@ -1,4 +1,3 @@
-```python
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import (
@@ -202,4 +201,3 @@ async def test_pid_controller(dut):
     cocotb.log.info("-----------------------------------")
     cocotb.log.info("ALL PID TESTS PASSED")
     cocotb.log.info("-----------------------------------")
-```
