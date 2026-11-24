@@ -37,7 +37,6 @@ module pi_fixed (
 
 
     // ADC INPUT REGISTERS
-=
 
     reg [7:0] ref_sample;
     reg [7:0] feedback_sample;
