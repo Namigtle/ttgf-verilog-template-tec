@@ -20,9 +20,6 @@ module tb_pid_fixed;
     integer csv_file;
     integer errors;
 
-    // =====================================================
-    // 2. PID MODULE INSTANTIATION
-    // =====================================================
 
     pid_fixed dut (
         .clk(clk),
@@ -33,20 +30,13 @@ module tb_pid_fixed;
         .dac_code(dac_code)
     );
 
-    // =====================================================
-    // 3. CLOCK GENERATION
-    // Period = 200 us
-    // Frequency = 5 kHz
-    // =====================================================
+
 
     initial begin
         clk = 1'b0;
         forever #100 clk = ~clk;
     end
 
-    // =====================================================
-    // 4. TASK: WAIT FOR N CLOCK CYCLES
-    // =====================================================
 
     task wait_cycles;
         input integer number_cycles;
@@ -59,9 +49,7 @@ module tb_pid_fixed;
         end
     endtask
 
-    // =====================================================
-    // 5. TASK: DISPLAY AND SAVE RESULTS
-    // =====================================================
+
 
     task log_sample;
         begin
@@ -94,9 +82,7 @@ module tb_pid_fixed;
         end
     endtask
 
-    // =====================================================
-    // 6. MAIN TEST SEQUENCE
-    // =====================================================
+
 
     initial begin
 
@@ -130,9 +116,6 @@ module tb_pid_fixed;
         $display("Time(ns),Ref,Feedback,DAC,PID_Internal");
         $display("----------------------------------------------------");
 
-        // -------------------------------------------------
-        // TEST 0: RESET
-        // -------------------------------------------------
 
         wait_cycles(3);
 
@@ -140,11 +123,7 @@ module tb_pid_fixed;
         rst_n = 1'b1;
         ena = 1'b1;
 
-        // -------------------------------------------------
-        // TEST 1: REFERENCE STEP = 0.5 V
-        //
-        // ADC code = round(0.5*256/5) = 26
-        // -------------------------------------------------
+
 
         @(negedge clk);
 
@@ -160,9 +139,7 @@ module tb_pid_fixed;
             log_sample;
         end
 
-        // -------------------------------------------------
-        // TEST 2: FEEDBACK = 10
-        // -------------------------------------------------
+
 
         @(negedge clk);
 
@@ -177,9 +154,7 @@ module tb_pid_fixed;
             log_sample;
         end
 
-        // -------------------------------------------------
-        // TEST 3: FEEDBACK = 20
-        // -------------------------------------------------
+
 
         @(negedge clk);
 
@@ -194,9 +169,7 @@ module tb_pid_fixed;
             log_sample;
         end
 
-        // -------------------------------------------------
-        // TEST 4: FEEDBACK = 26
-        // -------------------------------------------------
+
 
         @(negedge clk);
 
@@ -211,9 +184,6 @@ module tb_pid_fixed;
             log_sample;
         end
 
-        // -------------------------------------------------
-        // TEST 5: ENABLE DISABLED
-        // -------------------------------------------------
 
         @(negedge clk);
         ena = 1'b0;
@@ -225,9 +195,7 @@ module tb_pid_fixed;
 
         log_sample;
 
-        // -------------------------------------------------
-        // TEST 6: ENABLE REACTIVATED
-        // -------------------------------------------------
+
 
         @(negedge clk);
         ena = 1'b1;
