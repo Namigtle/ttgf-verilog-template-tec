@@ -12,22 +12,22 @@ The controller receives:
 
 The tracking error is calculated as:
 
-\[
+$
 e[k] = r[k] - y[k]
-\]
+$
 
 The PI controller uses the following incremental difference equation:
 
-\[
+$
 u[k] = u[k-1] + \frac{9e[k]-7e[k-1]}{128}
-\]
+$
 
 The controller gains are:
 
 - Proportional gain: $K_p = 0.0625$
-- Integral gain: \(K_i = 78.125\)
-- Sampling period: \(T_s = 200\,\mu s\)
-- Sampling frequency: \(f_s = 5\,kHz\)
+- Integral gain: $K_i = 78.125$
+- Sampling period: $T_s = 200\,\mu s$
+- Sampling frequency: $f_s = 5\,kHz$
 
 ### Clock and sampling frequency
 
@@ -41,9 +41,9 @@ The PI algorithm is implemented using fixed-point arithmetic (Q7 representation)
 
 The internal accumulator is limited to the range from 0 to 32,640. The resulting control signal is rounded and saturated to an 8-bit output:
 
-\[
+$
 0 \leq u_{\mathrm{out}}[k] \leq 255
-\]
+$
 
 The digital control output is available through `uo_out[7:0]`.
 
@@ -113,10 +113,10 @@ The nominal component values used for the second-order filter are:
 
 The nominal plant transfer function is:
 
-\[
+$
 G(s)=\frac{1.806\times10^6}
 {s^2+1194s+10^6}
-\]
+$
 
 The ADC, DAC, signal-conditioning circuits, and Sallen–Key filter are external to the digital chip.
 
