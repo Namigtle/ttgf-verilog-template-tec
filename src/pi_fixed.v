@@ -11,9 +11,6 @@ module pi_fixed (
     output reg  [7:0] dac_code
 );
 
-    // =====================================================
-    // PARAMETERS
-    // =====================================================
 
     // Clock = 50 MHz
     // Sampling frequency = 5 kHz
@@ -21,27 +18,12 @@ module pi_fixed (
 
     localparam [13:0] SAMPLE_MAX = 14'd9999;
 
-    // PI coefficients:
-    // Kp = 1/16
-    // Ki = 78.125
-    //
-    // Tustin:
-    // C0 =  9/128
-    // C1 = -7/128
-    //
-    // u[k] = u[k-1] + (9e[k] - 7e[k-1])/128
 
     localparam signed [17:0] U_MAX = 18'sd32640;
 
-    // =====================================================
-    // SAMPLING COUNTER
-    // =====================================================
 
     reg [13:0] sample_count;
 
-    // =====================================================
-    // PIPELINE CONTROL
-    // =====================================================
 
     localparam [2:0]
         IDLE       = 3'd0,
@@ -53,16 +35,14 @@ module pi_fixed (
 
     reg [2:0] state;
 
-    // =====================================================
-    // STAGE 1: ADC INPUT REGISTERS
-    // =====================================================
+
+    // ADC INPUT REGISTERS
+=
 
     reg [7:0] ref_sample;
     reg [7:0] feedback_sample;
 
-    // =====================================================
-    // STAGE 2: ERROR CALCULATION
-    // =====================================================
+    // ERROR CALCULATION
 
     reg signed [8:0] error_reg;
     reg signed [8:0] error_previous;
@@ -73,9 +53,7 @@ module pi_fixed (
         $signed({1'b0, ref_sample}) -
         $signed({1'b0, feedback_sample});
 
-    // =====================================================
-    // STAGE 3: PI TERMS
-    // =====================================================
+    // PI TERMS
 
     wire signed [12:0] error_extended;
     wire signed [12:0] previous_extended;
@@ -98,9 +76,9 @@ module pi_fixed (
     reg signed [12:0] term_current_reg;
     reg signed [12:0] term_previous_reg;
 
-    // =====================================================
-    // STAGE 4: PI INCREMENT
-    // =====================================================
+
+    // PI INCREMENT
+
 
     wire signed [12:0] delta_calculated;
 
@@ -109,9 +87,9 @@ module pi_fixed (
 
     reg signed [12:0] delta_reg;
 
-    // =====================================================
-    // STAGE 5: CONTROL ACCUMULATOR
-    // =====================================================
+
+    // CONTROL ACCUMULATOR
+
 
     reg [15:0] u_accumulator;
 
@@ -131,18 +109,17 @@ module pi_fixed (
 
     reg signed [17:0] u_candidate;
 
-    // =====================================================
+
     // DAC ROUNDING
-    // =====================================================
+
 
     wire [7:0] rounded_dac;
 
     assign rounded_dac =
         (u_candidate + 18'sd64) >>> 7;
 
-    // =====================================================
     // SEQUENTIAL PIPELINE
-    // =====================================================
+
 
     always @(posedge clk or negedge rst_n) begin
 
@@ -171,18 +148,18 @@ module pi_fixed (
 
         else if (ena) begin
 
-            // ---------------------------------------------
+            
             // Sampling counter
-            // ---------------------------------------------
+           
 
             if (sample_count == SAMPLE_MAX)
                 sample_count <= 14'd0;
             else
                 sample_count <= sample_count + 1'b1;
 
-            // ---------------------------------------------
+            
             // Pipeline state machine
-            // ---------------------------------------------
+           
 
             case (state)
 

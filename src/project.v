@@ -19,9 +19,7 @@ module tt_um_pid_controller (
     input  wire       rst_n
 );
 
-    // -------------------------------------------------
     // INPUT MAPPING
-    // -------------------------------------------------
 
     wire [7:0] ref_adc;
     wire [7:0] feedback_adc;
@@ -29,15 +27,12 @@ module tt_um_pid_controller (
     assign ref_adc      = ui_in;
     assign feedback_adc = uio_in;
 
-    // -------------------------------------------------
-    // PID OUTPUT
-    // -------------------------------------------------
+    // PI OUTPUT
 
     wire [7:0] dac_code;
 
-    // -------------------------------------------------
-    // PID FIXED-POINT CONTROLLER
-    // -------------------------------------------------
+    // PI FIXED-POINT CONTROLLER
+
 
     pi_fixed pi_inst (
         .clk          (clk),
@@ -50,9 +45,7 @@ module tt_um_pid_controller (
         .dac_code      (dac_code)
     );
 
-    // -------------------------------------------------
     // TINY TAPEOUT OUTPUT MAPPING
-    // -------------------------------------------------
 
     assign uo_out  = dac_code;
 
