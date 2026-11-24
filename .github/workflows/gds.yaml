@@ -39,7 +39,7 @@ jobs:
         uses: TinyTapeout/tt-gds-action/gl_test@ttgf26c
 
   # ==========================================
-  # VIEWER BUILD: prepare and upload the site
+  # VIEWER BUILD
   # ==========================================
 
   viewer_build:
@@ -53,12 +53,10 @@ jobs:
           name: tt_submission
           path: tt_submission
 
-      - name: Read PDK information
+      - name: Set PDK
         shell: bash
-        working-directory: tt_submission
         run: |
-          PDK=$(jq -r '.PDK' pdk.json)
-          echo "PDK=$PDK" >> "$GITHUB_ENV"
+          echo "PDK=gf180mcuD" >> "$GITHUB_ENV"
 
       - name: Download GDS render
         uses: actions/download-artifact@v7
@@ -69,6 +67,8 @@ jobs:
       - name: Copy GDS and OASIS files
         shell: bash
         run: |
+          set -e
+          ls -lah tt_submission
           cp tt_submission/*.gds gh-pages/tinytapeout.gds
           cp tt_submission/*.oas gh-pages/tinytapeout.oas
 
@@ -80,9 +80,8 @@ jobs:
           <html lang="en">
           <head>
             <meta charset="UTF-8">
-            <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Redirecting to 3D Viewer...</title>
+            <title>Tiny Tapeout 3D Viewer</title>
           </head>
           <body>
             <script>
@@ -99,7 +98,7 @@ jobs:
           name: github-pages-${{ github.run_attempt }}
 
   # ==========================================
-  # VIEWER DEPLOY: publish the uploaded site
+  # VIEWER DEPLOY
   # ==========================================
 
   viewer_deploy:
